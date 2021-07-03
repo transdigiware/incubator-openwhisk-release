@@ -1,3 +1,4 @@
+#!/usr/bin/env bash
 #
 # Licensed to the Apache Software Foundation (ASF) under one or more
 # contributor license agreements.  See the NOTICE file distributed with
@@ -15,31 +16,25 @@
 # limitations under the License.
 #
 
-github:
-  description: "Tools and documentation for Apache OpenWhisk Release Managers"
-  homepage: https://openwhisk.apache.org/
-  labels:
-    - openwhisk
-    - apache
-  protected_branches:
-    master:
-      required_status_checks:
-        strict: false
-        contexts:
-          - "Travis CI - Pull Request"
-      required_pull_request_reviews:
-        required_appoving_review_count: 1
-      required_signatures: false
-  enabled_merge_buttons:
-    merge: false
-    squash: true
-    rebase: true
-  features:
-    issues: true
+set -e
 
-notifications:
-  commits: commits@openwhisk.apache.org
-  issues_status: issues@openwhisk.apache.org
-  issues_comment: issues@openwhisk.apache.org
-  pullrequests_status: issues@openwhisk.apache.org
-  pullrequests_comment: issues@openwhisk.apache.org
+SCRIPTDIR="$(cd $(dirname "$0")/ && pwd)"
+SCRIPTNAME=$(basename "$0")
+GPG_KEY_ID=${GPG_KEY_ID:?Your GPG Key ID is required}
+
+if [ $# -lt 1 ]; then
+  echo "Usage: $SCRIPTNAME <config-file>"
+  exit -1
+fi
+
+echo building release from configuration
+./build_release.sh $1 $GPG_KEY_ID
+
+echo verifying release candidate
+./local_verify.sh $1
+
+echo uploading release candidate to staging area
+./upload_to_staging.sh $1
+
+echo generating release candidate vote template
+./gen-release-vote.py $1 -n

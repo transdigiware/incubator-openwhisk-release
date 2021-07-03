@@ -29,17 +29,14 @@ KEYS_DIST=https://dist.apache.org/repos/dist/release/openwhisk
 # the artifact being released
 NAME=${1?"missing artifact name e.g., openwhisk-client-js"}
 
-# the name of the project (to match what is in the NOTICE file)
-DESCRIPTION=${2?"missing project description e.g., 'OpenWhisk JavaScript Client Library'"}
-
 # the version of the release artifact
-V=${3?"missing version e.g., '3.19.0'"}
+V=${2?"missing version e.g., '3.19.0'"}
 
-# the release candidate, usualy 'rc1'
-RC=${4:-rc1}
+# the release candidate, usually 'rc1'
+RC=${3:-rc1}
 
 # the last argument is optional and if set to 'cleanup', the script deletes the scratch space at completion
-REMOVE_DIR=${5:-cleanup}
+REMOVE_DIR=${4:-cleanup}
 
 # set to non-zero to download the artifacts to verify, this is the default
 DL=${DL:-1}
@@ -67,14 +64,11 @@ TGZ=$NAME-$V-sources.tar.gz
 # this is a constructed name for the keys file
 KEYS=$RC-$V-KEYS
 
-NOTICE=$(cat << END
-Apache $DESCRIPTION
-Copyright 2016-2021 The Apache Software Foundation
+NOTICE_REGEX='^Apache .+
+Copyright [0-9]{4}-2021 The Apache Software Foundation
 
 This product includes software developed at
-The Apache Software Foundation (http://www.apache.org/).
-END
-)
+The Apache Software Foundation \(http:\/\/www\.apache\.org\/\)\.$'
 
 echo "$(basename $0) (script SHA1: $(gpg --print-md SHA1 $0 | cut -d' ' -f2-))"
 
@@ -145,7 +139,7 @@ function finish() {
   fi
 }
 
-## checks if the rc has a pakage.json file containing a version field matching the rc
+## checks if the rc has a package.json file containing a version field matching the rc
 ## the first parameter is a path to the file to check e.g., package.json or package-lock.json
 ## the second parameter is the version to confirm
 function packageJsonCheckVersion() {
@@ -183,6 +177,21 @@ function analyzeKeyImport() {
     fi
 }
 
+function validateNotice() {
+    output=$1
+    if [[ "$output" =~ $NOTICE_REGEX ]]; then
+        printf " $(tput setaf 2)passed$(tput sgr0)\n"
+    else
+        ERROR=1
+        printf " $(tput setaf 1)failed$(tput sgr0)"
+        if [[ $2 != "" ]]; then
+          echo " ($2)"
+        else
+          printf "\n"
+        fi
+    fi
+}
+
 if [ $DL -ne 0 ]; then
   SRC=$RC_DIST/$RC
   echo fetching tarball and signatures from $SRC
@@ -200,7 +209,7 @@ if [ $DL -ne 0 ]; then
   statusok $? "$RESULT"
 
   printf "fetching apache license..."
-  RESULT=$($CURL http://www.apache.org/licenses/LICENSE-2.0 -o "$DIR/LICENSE-2.0" 2>&1)
+  RESULT=$($CURL https://www.apache.org/licenses/LICENSE-2.0 -o "$DIR/LICENSE-2.0" 2>&1)
   statusok $? "$RESULT"
 else
   echo copying from $LOCAL_DIR
@@ -209,7 +218,7 @@ else
   cp "$LOCAL_DIR/$TGZ.sha512" "$DIR/$TGZ.sha512" || exit 1
 
   printf "fetching apache license..."
-  RESULT=$($CURL http://www.apache.org/licenses/LICENSE-2.0 -o "$DIR/LICENSE-2.0" 2>&1)
+  RESULT=$($CURL https://www.apache.org/licenses/LICENSE-2.0 -o "$DIR/LICENSE-2.0" 2>&1)
   statusok $? "$RESULT"
 fi
 
@@ -246,7 +255,7 @@ echo "$(tput setaf 6)$SHA$(tput sgr0)"
 printf "validating sha512..."
 validate "$EXPECTED" "$SHA" "$CMD"
 
-printf "verifying asc..."  
+printf "verifying asc..."
 CMD="gpg --verify '$DIR/$TGZ.asc' '$DIR/$TGZ'"
 ASC=$(eval $CMD 2>&1)
 STATUS=$?
@@ -258,8 +267,8 @@ fi
 validate $STATUS 0 "$CMD" "signed-by: $SIGNER"
 
 printf "verifying notice..."
-NTXT=$(cat "$DIR/$BASE/NOTICE.txt")
-validate "$NOTICE" "$NTXT" "cat '$DIR/$BASE/NOTICE.txt'"
+NOTICE=$(cat "$DIR/$BASE/NOTICE.txt")
+validateNotice "$NOTICE" "cat '$DIR/$BASE/NOTICE.txt'"
 
 printf "verifying absence of DISCLAIMER.txt"
 CMD="test -f '$DIR/$BASE/DISCLAIMER.txt'"
@@ -277,7 +286,7 @@ CMP=$(eval "$CMD")
 validate $? 0 "$CMD"
 
 printf "verifying sources have proper headers..."
-if [ -f "$DIR/$BASE/tools/travis/scancodeExlusions" ]; then
+if [ -f "$DIR/$BASE/tools/travis/scancodeExclusions" ]; then
     SCANCODE_EXTRA_ARGS="--gitignore '$DIR/$BASE/tools/travis/scancodeExclusions'"
 else
     SCANCODE_EXTRA_ARGS=""
